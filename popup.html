@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>Grounds</title>
+</head>
+<body>
+  <header class="head">
+    <span class="logo" aria-hidden="true"></span>
+    <div class="brand-txt">
+      <h1>Grounds</h1>
+      <p class="tagline">How well-argued is this page?</p>
+    </div>
+  </header>
+
+  <section class="card toggle-row">
+    <div class="toggle-txt">
+      <span class="label">Auto-analyze articles</span>
+      <span class="sub">Rate how well-argued each page is</span>
+    </div>
+    <label class="switch" title="Analyze articles automatically as you read">
+      <input type="checkbox" id="active" />
+      <span class="track"><span class="thumb"></span></span>
+    </label>
+  </section>
+
+  <section class="card">
+    <label class="field">
+      <span class="label">Jev API key</span>
+      <input type="password" id="apiKey" placeholder="TypeSafe bearer key" autocomplete="off" />
+    </label>
+  </section>
+
+  <p class="explain">
+    Grounds reads the current article and asks Jev, in a single call, how
+    <b>well-argued</b> it is — real reasons and structure, not rhetoric (and
+    regardless of whether the conclusions are right). A badge appears in the
+    bottom-right corner — only when the page is a real article.
+  </p>
+
+  <div class="buttons">
+    <button id="run" class="primary">Analyze page</button>
+    <button id="clear">Hide badge</button>
+  </div>
+
+  <p id="status" class="status" role="status"></p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

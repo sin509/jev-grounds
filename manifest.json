@@ -5,6 +5,7 @@
   "description": "Shows a badge rating how well-argued an article is — reasons and structure, not rhetoric. Powered by the Jev API.",
   "permissions": ["storage", "activeTab", "scripting"],
   "host_permissions": ["https://api.typesafe.ai/*"],
+  "optional_host_permissions": ["http://*/*", "https://*/*"],
   "icons": {
     "16": "icons/icon16.png",
     "32": "icons/icon32.png",

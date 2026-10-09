@@ -97,8 +97,11 @@ h1 { font-size: 16px; margin: 0; letter-spacing: .2px; }
   margin-bottom: 12px;
 }
 .field { display: flex; flex-direction: column; gap: 6px; }
+.field + .field { margin-top: 10px; }
 .label { font-weight: 600; font-size: 12px; }
-input[type="password"] {
+input[type="password"],
+input[type="url"],
+input[type="text"] {
   padding: 9px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -106,7 +109,9 @@ input[type="password"] {
   background: var(--bg);
   color: var(--fg);
 }
-input[type="password"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+input[type="password"]:focus,
+input[type="url"]:focus,
+input[type="text"]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 
 .explain {
   margin: 0 2px 14px;

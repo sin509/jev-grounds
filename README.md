@@ -47,8 +47,11 @@ requests.
 2. Clone this repository (or download the ZIP).
 3. Open `chrome://extensions` and turn on Developer mode (top right).
 4. Click Load unpacked and select this folder.
-5. Open the popup, paste your Jev API key, then either press Analyze page on an
-   article, or turn on Auto analyze to run it on articles as you read.
+5. Open the popup, paste your Jev API key (and optionally a custom API Base URL),
+   then either press Analyze page on an article, or turn on Auto analyze to run
+   it on articles as you read. Leave API Base URL empty to use the default
+   (`https://api.typesafe.ai`). You can paste either the host base or the full
+   `/v1/systemone` endpoint URL.
 
 There is no build step. It is plain HTML, CSS and JavaScript.
 
@@ -57,31 +60,37 @@ There is no build step. It is plain HTML, CSS and JavaScript.
 There is no API key in this repository, and none ships with the extension. Each
 user provides their own Jev key. It is stored only in your browser
 (`chrome.storage.local`), it never syncs, and it is used only by the background
-service worker. The web page never sees it.
+service worker. The web page never sees it. The optional API Base URL is stored
+the same way; leave it blank to use `https://api.typesafe.ai`.
 
 ## Privacy and data
 
 To score an article, Grounds sends the extracted article text to the Jev API
-(`https://api.typesafe.ai`) over HTTPS, together with your key. In auto mode this
-happens for every article you read. Grounds:
+over HTTPS, together with your key. By default that is `https://api.typesafe.ai`
+(path `/v1/systemone`). If you set a custom API Base URL in the popup, the same
+payload goes there instead. In auto mode this happens for every article you
+read. Grounds:
 
 * sends only the extracted article text, not the full page HTML or form fields;
 * makes the request from the background service worker, so your key is never
   exposed to the page;
-* can make privileged cross origin requests only to `api.typesafe.ai` (see
-  `host_permissions`);
+* by default can make privileged cross-origin requests only to
+  `api.typesafe.ai` (`host_permissions`); a custom base prompts for that host
+  at runtime via `optional_host_permissions`;
 * does not store, log, or send your data anywhere else.
 
-Anything you send is handled under TypeSafe's own terms. Do not run it on pages
-you consider private or confidential unless you are comfortable with that.
+Anything you send is handled under the API host's own terms (TypeSafe by
+default). Do not run it on pages you consider private or confidential unless you
+are comfortable with that.
 
 ## Permissions
 
 | Permission | Reason |
 |---|---|
-| `storage` | Save your API key and settings locally. |
+| `storage` | Save your API key, optional API Base URL, and settings locally. |
 | `activeTab`, `scripting` | Inject the analyzer into the current tab on demand. |
-| `host_permissions: api.typesafe.ai` | Call the Jev API. |
+| `host_permissions: api.typesafe.ai` | Call the default Jev API. |
+| `optional_host_permissions: http(s)://*/*` | If you set a custom API Base URL, Chrome asks at runtime for access to that host only. |
 | content script on pages | Read the article text to analyze it. |
 
 ## Configuration
@@ -91,7 +100,8 @@ The parts you are likely to change live in a few constants:
 * Rubric and prompt: `background.js`, `ARGUMENT_INSTRUCTIONS` and
   `ARGUMENT_CRITERIA`. These define what "well argued" means and tell the model
   to ignore rhetoric.
-* Endpoint and model: `background.js`, `JEV_ENDPOINT` and `JEV_MODEL`.
+* Default API base, path, and model: `background.js`, `DEFAULT_API_BASE`,
+  `JEV_PATH`, and `JEV_MODEL`. The popup can override the base URL per user.
 * Thresholds: `content.js`, `STRONG_MIN`, `MIN_CHARS`, `MAX_CHARS`.
 * Labels and colours: `content.js`, `LEVELS`.
 
@@ -103,7 +113,7 @@ The parts you are likely to change live in a few constants:
 | `background.js` | Service worker: the single Jev call and score normalization. |
 | `content.js` | Extraction (Readability), gate, and badge (shadow DOM). |
 | `Readability.js` | Mozilla Readability, vendored (Apache 2.0). |
-| `popup.html`, `popup.css`, `popup.js` | The mini UI: key, auto toggle, buttons. |
+| `popup.html`, `popup.css`, `popup.js` | The mini UI: key, optional API base, auto toggle, buttons. |
 | `icons/` | Toolbar and store icons. |
 
 ## Notes and limitations

@@ -1,20 +1,70 @@
-// Popup logic: store the API key / active flag and drive the content script.
+// Popup logic: store the API key / base URL / active flag and drive the content script.
 
 const els = {
   active: document.getElementById("active"),
   apiKey: document.getElementById("apiKey"),
+  apiBaseUrl: document.getElementById("apiBaseUrl"),
   run: document.getElementById("run"),
   clear: document.getElementById("clear"),
   status: document.getElementById("status")
 };
 
-const DEFAULTS = { active: false, apiKey: "" };
+const DEFAULTS = { active: false, apiKey: "", apiBaseUrl: "" };
+const DEFAULT_API_BASE = "https://api.typesafe.ai";
 
 const VERDICT_WORDS = ["Unsupported", "Loosely argued", "Solidly argued", "Rigorously argued"];
 
 function setStatus(text, kind) {
   els.status.textContent = text || "";
   els.status.className = "status" + (kind ? " " + kind : "");
+}
+
+function resolveApiBase(raw) {
+  const trimmed = (raw || "").trim();
+  return trimmed || DEFAULT_API_BASE;
+}
+
+function hostPermissionPattern(baseUrl) {
+  try {
+    const u = new URL(baseUrl);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return `${u.protocol}//${u.host}/*`;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Ask for host access when the user picks a non-default API base (needs a
+// user gesture — call from change/click handlers, not from the service worker).
+async function ensureHostPermission(baseUrl) {
+  const pattern = hostPermissionPattern(baseUrl);
+  if (!pattern) {
+    return { ok: false, error: "Invalid API Base URL." };
+  }
+  let origin;
+  try {
+    origin = new URL(baseUrl).origin;
+  } catch (_) {
+    return { ok: false, error: "Invalid API Base URL." };
+  }
+  if (origin === new URL(DEFAULT_API_BASE).origin) {
+    return { ok: true };
+  }
+  const perm = { origins: [pattern] };
+  const already = await chrome.permissions.contains(perm);
+  if (already) return { ok: true };
+  const granted = await chrome.permissions.request(perm);
+  if (!granted) {
+    return { ok: false, error: "Host permission denied for " + origin + "." };
+  }
+  return { ok: true };
+}
+
+async function saveSettings() {
+  await chrome.storage.local.set({
+    apiKey: els.apiKey.value.trim(),
+    apiBaseUrl: els.apiBaseUrl.value.trim()
+  });
 }
 
 async function getActiveTab() {
@@ -40,6 +90,7 @@ async function init() {
   const cfg = await chrome.storage.local.get(DEFAULTS);
   els.active.checked = !!cfg.active;
   els.apiKey.value = cfg.apiKey || "";
+  els.apiBaseUrl.value = cfg.apiBaseUrl || "";
 }
 
 els.active.addEventListener("change", () =>
@@ -48,11 +99,32 @@ els.active.addEventListener("change", () =>
 els.apiKey.addEventListener("change", () =>
   chrome.storage.local.set({ apiKey: els.apiKey.value.trim() })
 );
+els.apiBaseUrl.addEventListener("change", async () => {
+  const base = resolveApiBase(els.apiBaseUrl.value);
+  const perm = await ensureHostPermission(base);
+  if (!perm.ok) {
+    setStatus(perm.error, "error");
+    return;
+  }
+  await chrome.storage.local.set({ apiBaseUrl: els.apiBaseUrl.value.trim() });
+  setStatus(
+    els.apiBaseUrl.value.trim()
+      ? "Using custom API base."
+      : "Using default API base.",
+    "ok"
+  );
+});
 
 els.run.addEventListener("click", async () => {
-  await chrome.storage.local.set({ apiKey: els.apiKey.value.trim() });
+  await saveSettings();
   if (!els.apiKey.value.trim()) {
     setStatus("Enter your Jev API key first.", "error");
+    return;
+  }
+  const base = resolveApiBase(els.apiBaseUrl.value);
+  const perm = await ensureHostPermission(base);
+  if (!perm.ok) {
+    setStatus(perm.error, "error");
     return;
   }
   els.run.disabled = true;

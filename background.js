@@ -3,7 +3,8 @@
 // soundness). When the page type is ambiguous, the same call also asks a Choice
 // to confirm it's a real article.
 
-const JEV_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
+const DEFAULT_API_BASE = "https://api.typesafe.ai";
+const JEV_PATH = "/v1/systemone";
 const JEV_MODEL = "jev-latest";
 
 // Argumentation rubric: 4 ordered levels => raw score 0..3, normalized to 0..100.
@@ -33,6 +34,56 @@ const PAGE_TYPE_INSTRUCTIONS =
   "What kind of page is this text taken from? Choose 'single article' only " +
   "if it is one coherent article or essay; 'feed or listing' for home pages, " +
   "social feeds, search results or link lists; otherwise 'other'.";
+
+function resolveApiBase(raw) {
+  const trimmed = (typeof raw === "string" ? raw : "").trim().replace(/\/+$/, "");
+  return trimmed || DEFAULT_API_BASE;
+}
+
+function jevEndpoint(apiBaseUrl) {
+  const base = resolveApiBase(apiBaseUrl);
+  let u;
+  try {
+    u = new URL(base);
+  } catch (_) {
+    throw new Error("Invalid API Base URL.");
+  }
+  if (u.protocol !== "http:" && u.protocol !== "https:") {
+    throw new Error("API Base URL must be http(s).");
+  }
+  // Accept either an origin/base ("https://host") or the full endpoint
+  // ("https://host/v1/systemone"). Pasting the curl URL must not double the path.
+  const path = u.pathname.replace(/\/+$/, "") || "";
+  if (path === JEV_PATH || path.endsWith(JEV_PATH)) {
+    u.pathname = path;
+    u.search = "";
+    u.hash = "";
+    return u.toString();
+  }
+  u.pathname = path + JEV_PATH;
+  u.search = "";
+  u.hash = "";
+  return u.toString();
+}
+
+function hostPermissionPattern(endpointUrl) {
+  const u = new URL(endpointUrl);
+  return `${u.protocol}//${u.host}/*`;
+}
+
+async function ensureHostAccess(endpointUrl) {
+  const pattern = hostPermissionPattern(endpointUrl);
+  const defaultOrigin = new URL(DEFAULT_API_BASE).origin;
+  if (new URL(endpointUrl).origin === defaultOrigin) return;
+  const perm = { origins: [pattern] };
+  const ok = await chrome.permissions.contains(perm);
+  if (!ok) {
+    throw new Error(
+      "Missing host permission for " + new URL(endpointUrl).origin +
+      ". Open the popup, set API Base URL, and grant access when prompted."
+    );
+  }
+}
 
 // Reads the chosen option from Jev's Choice answer, tolerating field variants.
 function readChoice(ans) {
@@ -68,7 +119,7 @@ function normalizeArgument(ans) {
   };
 }
 
-async function callJev(text, apiKey, withChoice) {
+async function callJev(text, apiKey, apiBaseUrl, withChoice) {
   const questions = {
     argument: {
       type: "score",
@@ -84,7 +135,10 @@ async function callJev(text, apiKey, withChoice) {
     };
   }
 
-  const res = await fetch(JEV_ENDPOINT, {
+  const endpoint = jevEndpoint(apiBaseUrl);
+  await ensureHostAccess(endpoint);
+
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Authorization": `Bearer ${apiKey}`,
@@ -119,12 +173,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg && msg.type === "scoreArticle") {
     (async () => {
       try {
-        const { apiKey } = await chrome.storage.local.get("apiKey");
+        const { apiKey, apiBaseUrl } = await chrome.storage.local.get({
+          apiKey: "",
+          apiBaseUrl: ""
+        });
         if (!apiKey) {
           sendResponse({ ok: false, error: "Missing Jev API key." });
           return;
         }
-        const result = await callJev(msg.text || "", apiKey, !!msg.withChoice);
+        const result = await callJev(msg.text || "", apiKey, apiBaseUrl, !!msg.withChoice);
         sendResponse({ ok: true, result });
       } catch (e) {
         sendResponse({ ok: false, error: String(e.message || e) });
